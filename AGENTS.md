@@ -47,6 +47,8 @@ cf/
 │   │   │   ├── workers/versions/create/# hand-written Build Output leaf override
 │   │   │   ├── d1/migrations/  # hand-written: `cf d1 migrations` (spliced into
 │   │   │   │                   # the generated d1 tree — see hand-written-overrides.ts)
+│   │   │   ├── sql/query/      # hand-written: table view for SQL query results
+│   │   │   │                   # (output post-processor for a generated leaf)
 │   │   │   ├── schema.ts       # hand-written: dump JSON-schema for an op
 │   │   │   └── tools.ts        # hand-written: list/print MCP tool definitions
 │   │   ├── lib/                # see "Library Map" below
@@ -311,6 +313,11 @@ Practical extensions of this rule:
     product-specific exceptions rather than shadowed leaves. They implement
     filesystem bookkeeping and Build Output trigger orchestration absent from
     one-shot OpenAPI operations.
+  - `sql/query/output.ts` is an output post-processor, not a command: the
+    generated SQL query leaf stays spec-derived and only hands its JSON result
+    to this module for a table view in interactive terminals. The generic half
+    (`lib/ui/table.ts`, the `postProcess` hook in `lib/output.ts`) knows nothing
+    about SQL.
   - Generalising runtime-schema lookup into a forge annotation waits for **four
     or more** examples; too few and the annotation gets fitted to one case. A
     third runtime-schema entry is fine, a fourth means stopping to design it.
@@ -486,13 +493,15 @@ complete `CommandMeta[]`, one per leaf. Current entries: `d1/migrations` and
 leaf stays as emitted, but its JSON result is rendered for people (a table) in
 interactive terminals. The entry is keyed by OpenAPI **operationId**, not by
 command path: the renderer depends on the response shape, which stays with the
-operation when Forge renames or regroups its command.
-`src/commands/<dir>/output.ts` exports `outputPostProcessor`, which the
+operation when Forge renames or regroups its command (`sql-api-query-post`
+moved from `cf analytics sql post` to `cf sql query` with no change to its
+entry). `src/commands/<dir>/output.ts` exports `outputPostProcessor`, which the
 generator imports into that leaf alone and passes to `formatOutput` with the
 global `--json` value. Generation fails when an entry is registered twice or
 lacks its `output.ts`, or when its operation no longer generates a command, has
 a non-JSON response, defines its own `json` argument, or is replaced by a leaf
-override. Each entry needs a drift guard in `src/__tests__/`.
+override. The current entry is `sql/query`. Each entry needs a drift guard in
+`src/__tests__/`.
 
 Reach for a sub-group only when the work genuinely is not an API
 operation. `d1 migrations` is a filesystem walk plus N calls to one endpoint,
@@ -661,7 +670,7 @@ Generated commands additionally get (per-command, not global): `--dry-run` on ev
 
 API fields that would emit an exact `--mode` flag are temporarily omitted until their upstream schemas stop using the reserved name. Body fields can still be supplied through `--body`; query, path, and header fields are temporarily unavailable.
 
-Structured API output is JSON; generated `binary`/`text` endpoints write their payload verbatim. Leaves with a registered output post-processor print a table instead when stdin and stdout are interactive terminals outside CI and no agent is detected; `--json` keeps them on JSON, and it is a no-op elsewhere. There is no global output-format `--format`, `--ndjson`, or `--fields` switch. Some generated leaves do expose `format` or `fields` as endpoint-specific API parameters. Callers needing ndjson pipe structured output through `jq -c '.[]'`.
+Structured API output is JSON; generated `binary`/`text` endpoints write their payload verbatim. Leaves with a registered output post-processor (currently the SQL query command) print a table instead when stdin and stdout are interactive terminals outside CI and no agent is detected; `--json` keeps them on JSON, and it is a no-op elsewhere. There is no global output-format `--format`, `--ndjson`, or `--fields` switch. Some generated leaves do expose `format` or `fields` as endpoint-specific API parameters. Callers needing ndjson pipe structured output through `jq -c '.[]'`.
 
 ### Reserved and current collisions
 

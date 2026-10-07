@@ -5,6 +5,7 @@ import type { ArgClassification } from "#lib/telemetry/index.js";
  * @generated from apis/overlays/sql.ts
  */
 import type { Argv, CommandModule } from "yargs";
+import { outputPostProcessor } from "#commands/sql/query/output.js";
 import { createCommandClient, requestApi } from "#lib/auth.js";
 import { compactBody, parseBody, setNestedValue } from "#lib/body-parser.js";
 import { formatDryRun } from "#lib/dry-run.js";
@@ -141,7 +142,11 @@ const command: CommandModule<CommonYargsOptions, Args> = {
 							headers: { "Content-Type": "text/plain" },
 						})
 					);
-					formatOutput(result, { successLabel: `Loaded` });
+					formatOutput(result, {
+						successLabel: `Loaded`,
+						json: argv.json,
+						postProcess: outputPostProcessor,
+					});
 					return;
 				}
 
@@ -152,7 +157,11 @@ const command: CommandModule<CommonYargsOptions, Args> = {
 							body: bodyData,
 						})
 					);
-					formatOutput(result, { successLabel: `Loaded` });
+					formatOutput(result, {
+						successLabel: `Loaded`,
+						json: argv.json,
+						postProcess: outputPostProcessor,
+					});
 					return;
 				}
 
@@ -204,7 +213,11 @@ const command: CommandModule<CommonYargsOptions, Args> = {
 						body: Object.keys(bodyData).length > 0 ? bodyData : undefined,
 					})
 				);
-				formatOutput(result, { successLabel: `Loaded` });
+				formatOutput(result, {
+					successLabel: `Loaded`,
+					json: argv.json,
+					postProcess: outputPostProcessor,
+				});
 			}
 		),
 };

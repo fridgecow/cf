@@ -335,6 +335,12 @@ export const handWrittenCommands: readonly HandWrittenCommand[] = [
 		dir: "workers/triggers",
 		describe: "Manage triggers (Routes, Workflows, Cron triggers etc.)",
 	},
+	{
+		// Renders `cf sql query` results.
+		kind: "outputPostProcessor",
+		operationId: "sql-api-query-post",
+		dir: "sql/query",
+	},
 ];
 
 export function rootHandWrittenCommands(): readonly RootHandWrittenCommand[] {

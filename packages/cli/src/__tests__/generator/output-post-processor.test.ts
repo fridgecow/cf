@@ -155,4 +155,13 @@ describe("output post-processor registry", () => {
 			missingModule,
 		]);
 	});
+
+	it("accepts the SQL query view registered in hand-written.ts", () => {
+		expect(handWrittenOutputPostProcessorModule("sql-api-query-post")).toBe(
+			"#commands/sql/query/output.js"
+		);
+		expect(
+			outputPostProcessorErrors([{ operationId: "sql-api-query-post" }])
+		).toEqual([]);
+	});
 });
