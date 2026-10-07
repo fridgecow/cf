@@ -5,7 +5,8 @@
  * set of hand-written commands either replace an underspecified operation or
  * add a local workflow with no API equivalent. This module splices non-root
  * entries into generated yargs trees and supplies metadata for those entries
- * and for hand-written roots.
+ * and for hand-written roots. It also resolves output post-processors, which
+ * leave a generated leaf in place and only render its result for terminals.
  *
  * This is a short list, not a mechanism to grow. Each entry is a
  * product-specific exception to the rule that `src/` contains no API
@@ -18,16 +19,18 @@
  * Leaf-override keys are the emit path the generator would have written,
  * minus `.ts`. Metadata comes from colocated `meta.json` sidecars.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
 	handWrittenCommands,
 	leafHandWrittenCommands,
+	outputPostProcessorHandWrittenCommands,
 	parentOverrideHandWrittenCommands,
 } from "../src/commands/hand-written.js";
 import type {
 	LeafOverrideHandWrittenCommand,
 	LeafHandWrittenCommand,
+	OutputPostProcessorHandWrittenCommand,
 } from "../src/commands/hand-written.js";
 import type {
 	CommandMeta as ForgeCommandMeta,
@@ -114,6 +117,52 @@ export function readHandWrittenLeafOverrideMeta(dir: string): HandWrittenMeta {
 		);
 	}
 	return meta as unknown as HandWrittenMeta;
+}
+
+/**
+ * Module a generated leaf imports its `outputPostProcessor` from, if one is
+ * registered for the operation. Unlike the command-path keys above, these
+ * entries are keyed by operationId: the renderer depends on the response
+ * shape, which stays with the operation when Forge renames its command.
+ */
+export function handWrittenOutputPostProcessorModule(
+	operationId: string | undefined,
+	entries: readonly OutputPostProcessorHandWrittenCommand[] = outputPostProcessorHandWrittenCommands()
+): string | undefined {
+	const entry = entries.find((command) => command.operationId === operationId);
+	return entry === undefined ? undefined : `#commands/${entry.dir}/output.js`;
+}
+
+/**
+ * Registration problems with output post-processors, given the metadata of
+ * every generated and hand-written command. Each registration must have its
+ * module and match an operation that still generates a command, so a spec
+ * rename or removal fails generation instead of silently dropping the view.
+ */
+export function outputPostProcessorErrors(
+	commandMeta: readonly Pick<CommandMeta, "operationId">[],
+	entries: readonly OutputPostProcessorHandWrittenCommand[] = outputPostProcessorHandWrittenCommands()
+): string[] {
+	const errors: string[] = [];
+	const operationIds = new Set(commandMeta.map((meta) => meta.operationId));
+	const registered = new Set<string>();
+	for (const entry of entries) {
+		const label = `Output post-processor for operation "${entry.operationId}"`;
+		if (registered.has(entry.operationId)) {
+			errors.push(`${label} is registered more than once.`);
+		}
+		registered.add(entry.operationId);
+		const module = fileURLToPath(
+			new URL(`../src/commands/${entry.dir}/output.ts`, import.meta.url)
+		);
+		if (!existsSync(module)) {
+			errors.push(`${label} is missing src/commands/${entry.dir}/output.ts.`);
+		}
+		if (!operationIds.has(entry.operationId)) {
+			errors.push(`${label} did not match a generated command.`);
+		}
+	}
+	return errors;
 }
 
 /**

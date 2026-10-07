@@ -57,13 +57,14 @@ describe("sanitizeArgs", () => {
 
 	it("records known global boolean values", () => {
 		const result = sanitizeArgs(
-			{ quiet: true, local: false, zone: "example.com" },
-			["list", "--quiet", "--no-local", "--zone", "example.com"],
+			{ quiet: true, json: true, local: false, zone: "example.com" },
+			["list", "--quiet", "--json", "--no-local", "--zone", "example.com"],
 			{ safeFlags: [] }
 		);
 
 		expect(result.sanitizedArgs).toEqual({
 			quiet: true,
+			json: true,
 			local: false,
 			zone: REDACTED,
 		});

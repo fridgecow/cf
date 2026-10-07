@@ -27,7 +27,7 @@ cf/
 │   │   ├── sdk/                # tracked generated SDK; rewritten by generation
 │   │   ├── commands/
 │   │   │   ├── _generated/     # tracked generated source; rewritten by pnpm generate
-│   │   │   ├── hand-written.ts # central root/leaf/override/subgroup registry
+│   │   │   ├── hand-written.ts # central root/leaf/override/subgroup/output registry
 │   │   │   ├── auth/           # hand-written: login, logout, whoami, profiles
 │   │   │   ├── login/          # hidden `cf login` alias for `cf auth login`
 │   │   │   ├── cli/            # hand-written: search and telemetry settings
@@ -176,9 +176,10 @@ the complete generated and hand-written `_meta/commands.json` catalogue (see
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Add/fix a generated command     | Overlay files in `@cloudflare/forge` — NOT in this repo. Edit forge, republish, re-vendor (`pnpm sync:forge`).                                                                                                                                                    |
 | Add a generated-command rule    | `packages/cli/generator/generator.ts` — emits handler body, arg shapes, batching, confirm prompts, etc.                                                                                                                                                           |
-| New cross-product flag          | yargs middleware in `packages/cli/src/index.ts` (`--zone`, `--profile`, `--quiet`, `--local`, `--persist-to`)                                                                                                                                                     |
+| New cross-product flag          | yargs middleware in `packages/cli/src/index.ts` (`--zone`, `--profile`, `--quiet`, `--json`, `--local`, `--persist-to`)                                                                                                                                           |
 | Hand-written command            | roots under `packages/cli/src/commands/{auth,build,cli,completions,dev,deploy,init,previews}/` plus `schema.ts` and `tools.ts`; generated-tree exceptions under `{access,ai,registrar,d1,tunnels,workers}/`; register every one in `src/commands/hand-written.ts` |
 | Hand-written metadata/emit      | per-command `meta.json`, `packages/cli/src/commands/hand-written.ts`, `generator/{hand-written-overrides,index,metadata}.ts`                                                                                                                                      |
+| Table view for a generated leaf | `packages/cli/src/commands/<dir>/output.ts` exporting `outputPostProcessor`, registered by operationId as an `outputPostProcessor` entry in `src/commands/hand-written.ts`; shared renderer in `lib/ui/table.ts`                                                  |
 | `cf init` scaffold / setup      | `packages/cli/src/commands/init/{index,workers,template}.ts`                                                                                                                                                                                                      |
 | `cf dev` discovery / spawn      | `packages/cli/src/commands/dev/{discover,known-impls,spawn}.ts`                                                                                                                                                                                                   |
 | `cf deploy` pipeline            | `packages/cli/src/commands/deploy/index.ts` + `lib/{build-output,deploy-context,deploy-input}.ts`                                                                                                                                                                 |
@@ -211,7 +212,7 @@ the complete generated and hand-written `_meta/commands.json` catalogue (see
 | `request-headers.ts`  | User-Agent plus `X-CF-CLI-Mode` / detected-agent headers; authentication is owned by the SDK/raw-fetch/auth layers                                                                                                                                                                                                                                        |
 | `dry-run.ts`          | `--dry-run` body-preview formatting (`bodyKind: 'json' \| 'multipart' \| 'octet-stream' \| 'none'`)                                                                                                                                                                                                                                                       |
 | `errors.ts`           | `handleError`; APIError box; status-level hints (no per-code knowledge in `src/`)                                                                                                                                                                                                                                                                         |
-| `output.ts`           | `formatOutput` (silent on null; `✓ <successLabel>` on TTY stderr); `--quiet` knob                                                                                                                                                                                                                                                                         |
+| `output.ts`           | `formatOutput` (silent on null; `✓ <successLabel>` on TTY stderr; optional `postProcess` renderer used only in interactive terminals, never with `--json`, in CI, or for detected agents); `--quiet` knob                                                                                                                                                 |
 | `progress.ts`         | `withProgress(label, task)` clack braille/timer spinner; active only with color + stdout TTY and no `CF_QUIET=1`                                                                                                                                                                                                                                          |
 | `prompt.ts`           | required text/enum/acknowledgement prompts; sensitivity is explicit OpenAPI/forge metadata, not a name regex; secret-only stdin ingestion; destructive confirmation                                                                                                                                                                                       |
 | `session.ts`          | `openSession(version)` — idempotent once-per-process banner emission at interactive invocation startup; prompt helpers call it defensively                                                                                                                                                                                                                |
@@ -233,6 +234,7 @@ the complete generated and hand-written `_meta/commands.json` catalogue (see
 | `ui/banner.ts`        | slim `renderPromptIntro(version)` headline and `formatCommand`; the old gradient/ASCII splash is removed                                                                                                                                                                                                                                                  |
 | `ui/theme.ts`         | background-neutral semantic colour palette and Chalk wrapper                                                                                                                                                                                                                                                                                              |
 | `ui/format.ts`        | one-line `success`, `warning`, `info`, and `hint` helpers                                                                                                                                                                                                                                                                                                 |
+| `ui/table.ts`         | `renderTable(columns, rows, { width, nullText })` for output post-processors: escapes control characters, measures wide characters, narrows the widest columns with `…`, and falls back to vertical records when even narrowed columns cannot fit                                                                                                         |
 | `input-validation.ts` | yargs-time arg coercion + `resolveFileToken(value, fieldName, format)` for `@<path>` ingestion; runtime body/path validation                                                                                                                                                                                                                              |
 | `resolve.ts`          | URL templating (path-param substitution), `isId`, `isValidDomainName`                                                                                                                                                                                                                                                                                     |
 
@@ -312,6 +314,8 @@ Practical extensions of this rule:
   - Generalising runtime-schema lookup into a forge annotation waits for **four
     or more** examples; too few and the annotation gets fitted to one case. A
     third runtime-schema entry is fine, a fourth means stopping to design it.
+    Output post-processors follow the same threshold for a Forge output
+    annotation.
 
 ### Lazy command registration
 
@@ -437,9 +441,10 @@ get the same treatment.
 
 `src/commands/hand-written.ts` is the single registry for root commands,
 generated-parent presentation overrides, leaf overrides, added leaf commands,
-and subgroups. `src/index.ts` derives its lazy root shells from that registry;
-`generator/hand-written-overrides.ts` derives the maps and metadata used to
-splice the non-root kinds into generated product trees.
+subgroups, and output post-processors. `src/index.ts` derives its lazy root
+shells from that registry; `generator/hand-written-overrides.ts` derives the
+maps and metadata used to splice the non-root kinds into generated product
+trees.
 
 **Root command** (`kind: "root"`) — registered directly at `cf <name>` rather
 than inside a generated product. A root may itself be a leaf (`build`, `dev`) or
@@ -477,6 +482,18 @@ replacing anything. Nothing can be derived, so `meta.json` carries a
 complete `CommandMeta[]`, one per leaf. Current entries: `d1/migrations` and
 `workers/triggers`.
 
+**Output post-processor** (`kind: "outputPostProcessor"`) — the generated
+leaf stays as emitted, but its JSON result is rendered for people (a table) in
+interactive terminals. The entry is keyed by OpenAPI **operationId**, not by
+command path: the renderer depends on the response shape, which stays with the
+operation when Forge renames or regroups its command.
+`src/commands/<dir>/output.ts` exports `outputPostProcessor`, which the
+generator imports into that leaf alone and passes to `formatOutput` with the
+global `--json` value. Generation fails when an entry is registered twice or
+lacks its `output.ts`, or when its operation no longer generates a command, has
+a non-JSON response, defines its own `json` argument, or is replaced by a leaf
+override. Each entry needs a drift guard in `src/__tests__/`.
+
 Reach for a sub-group only when the work genuinely is not an API
 operation. `d1 migrations` is a filesystem walk plus N calls to one endpoint,
 ordered and bookkept by rules OpenAPI cannot express; Workers trigger deploy
@@ -492,7 +509,7 @@ Hand-written commands with no generated parent (`auth/`, `build/`, `cli/`,
 `schema.ts` and `tools.ts`) are `kind: "root"` entries and must not collide
 with a generated product name.
 
-Generation merges every hand-written leaf into the complete `_meta/commands.json` consumed by completions and tools. Generation additionally emits `_meta/hand-written-commands.json`, repeating only executable entries with their `root` / `leafOverride` / `leaf` / `subgroup` provenance and source directory. Presentation-only `parentOverride` entries do not represent commands and are not emitted there.
+Generation merges every hand-written leaf into the complete `_meta/commands.json` consumed by completions and tools. Generation additionally emits `_meta/hand-written-commands.json`, repeating only executable entries with their `root` / `leafOverride` / `leaf` / `subgroup` provenance and source directory. Presentation-only `parentOverride` and `outputPostProcessor` entries do not represent commands and are not emitted there.
 
 ### Deprecated methods
 
@@ -537,6 +554,14 @@ allowlists — yargs is authoritative. Keep it that way.
 `✓ <successLabel>` on stderr when TTY. For structured output it unwraps SDK
 pages/envelopes, pretty-prints JSON to stdout, and syntax-highlights when color
 is supported.
+
+A leaf with a registered output post-processor (see "Hand-written command
+directories") passes `postProcess` and `json: argv.json` to `formatOutput`. The
+renderer runs only when stdin and stdout are interactive terminals, outside CI,
+when no agent is detected, and without `--json`; it may return `undefined` to
+fall back to JSON, and a renderer error also falls back to JSON. Everything
+else, including every pipe, receives the unchanged JSON. Renderers build on the
+product-agnostic `lib/ui/table.ts`.
 
 For binary or non-JSON-shaped responses (KV values, R2 object bytes,
 signed-URL downloads), the generator derives
@@ -606,6 +631,10 @@ These have stabilised this repo's voice; preserve them.
 - **Secret prompt:** clack.password (masks input).
 - **Success line:** `✓ <successLabel>` on stderr; null/undefined SDK
   results suppress stdout output entirely.
+- **Tables:** output post-processors render with `lib/ui/table.ts` — muted
+  box-drawing borders, bold headers, right-aligned numeric columns, and muted
+  nulls; any summary line below the table is muted too. Tables are a lossy
+  view for people; JSON stays the contract for everything else.
 - **Splash screen:** bare `cf` prints the headline, a short getting-started list, and the docs link. Yargs owns root, group, and command help rendering.
 
 ## Global Flags
@@ -617,6 +646,7 @@ Live globals (`packages/cli/src/index.ts:buildCli`):
 | `--help`       | `-h`  | Show help                                                       |
 | `--version`    | `-v`  | Show plain version on stdout (branded banner on stderr)         |
 | `--quiet`      | `-q`  | Suppress non-essential output                                   |
+| `--json`       | —     | Print results as JSON instead of tables                         |
 | `--zone`       | `-z`  | Zone ID or domain (overrides `CLOUDFLARE_ZONE_ID`)              |
 | `--profile`    | —     | Use a specific auth profile                                     |
 | `--mode`       | `-m`  | Mode used to evaluate `cloudflare.config.ts`                    |
@@ -631,24 +661,24 @@ Generated commands additionally get (per-command, not global): `--dry-run` on ev
 
 API fields that would emit an exact `--mode` flag are temporarily omitted until their upstream schemas stop using the reserved name. Body fields can still be supplied through `--body`; query, path, and header fields are temporarily unavailable.
 
-Structured API output is JSON; generated `binary`/`text` endpoints write their payload verbatim. There is no global output-format `--format`, `--json`, `--ndjson`, or `--fields` switch. Some generated leaves do expose `format` or `fields` as endpoint-specific API parameters. Callers needing ndjson pipe structured output through `jq -c '.[]'`.
+Structured API output is JSON; generated `binary`/`text` endpoints write their payload verbatim. Leaves with a registered output post-processor print a table instead when stdin and stdout are interactive terminals outside CI and no agent is detected; `--json` keeps them on JSON, and it is a no-op elsewhere. There is no global output-format `--format`, `--ndjson`, or `--fields` switch. Some generated leaves do expose `format` or `fields` as endpoint-specific API parameters. Callers needing ndjson pipe structured output through `jq -c '.[]'`.
 
 ### Reserved and current collisions
 
 `src/index.ts` documents several names the project wants to reserve for cross-cutting features. This is a design constraint, not an enforced global deny-list: yargs scopes leaf options, and generated commands may otherwise expose reserved names sourced from OpenAPI. Do not introduce new collisions casually, but check the generated surface before describing a name as unavailable.
 
-| Flag               | Alias | Reserved for                                                         |
-| ------------------ | ----- | -------------------------------------------------------------------- |
-| `--remote`         | —     | Force production routing if local ever becomes the default           |
-| `--cwd`            | —     | Run as if from a different working directory                         |
-| `--config`         | `-c`  | Explicit Cloudflare config-file path                                 |
-| `--mode`           | `-m`  | Live global configuration and project-implementation mode            |
-| `--experimental-*` | —     | Namespace for opt-in feature gates                                   |
-| `--json`           | —     | Output-format toggle (claimed against future default-output changes) |
-| `--ndjson`         | —     | Output-format toggle                                                 |
-| `--pretty`         | —     | Output-format toggle                                                 |
+| Flag               | Alias | Reserved for                                               |
+| ------------------ | ----- | ---------------------------------------------------------- |
+| `--remote`         | —     | Force production routing if local ever becomes the default |
+| `--cwd`            | —     | Run as if from a different working directory               |
+| `--config`         | `-c`  | Explicit Cloudflare config-file path                       |
+| `--mode`           | `-m`  | Live global configuration and project-implementation mode  |
+| `--experimental-*` | —     | Namespace for opt-in feature gates                         |
+| `--json`           | —     | Live global output-format toggle (JSON instead of tables)  |
+| `--ndjson`         | —     | Output-format toggle                                       |
+| `--pretty`         | —     | Output-format toggle                                       |
 
-`--mode` is registered globally and exact colliding API fields are temporarily omitted. `--remote` exists on a generated Pay Per Crawl command. The other exact names in this table are not registered as root/global options today and are normally rejected outside a leaf that defines them. The in-source design list is the `Reserved (future)` comment in `src/index.ts`; it does not itself register or reject options.
+`--mode` is registered globally and exact colliding API fields are temporarily omitted. `--json` is registered globally; no generated leaf defines a `json` option, and a drift guard in `src/__tests__/commands/hand-written-metadata.test.ts` fails if one appears. `--remote` exists on a generated Pay Per Crawl command. The other exact names in this table are not registered as root/global options today and are normally rejected outside a leaf that defines them. The in-source design list is the `Reserved (future)` comment in `src/index.ts`; it does not itself register or reject options.
 
 ## Vendored packages
 
@@ -884,7 +914,7 @@ From the Forge RFC, these are the vocabulary and shapes to prefer for new overla
 - Prefer `get` over `info`; existing spec operations include `cf vectorize info` under the top-level-hidden `vectorize` root.
 - Always `--force`, never `--skip-confirmations` / `--yes` / `-y`
   variants.
-- Output is JSON by default. There are no global `--json`, `--ndjson`, `--pretty`, or `--format` controls; the first three names are reserved for future output controls. Endpoint schemas can still expose ordinary operation arguments named `--format` or `--fields`.
+- Output is JSON by default. Leaves with a registered output post-processor show tables to people in interactive terminals, and the global `--json` flag keeps them on JSON. There are no global `--ndjson`, `--pretty`, or `--format` controls; the first two names are reserved for future output controls. Endpoint schemas can still expose ordinary operation arguments named `--format` or `--fields`.
 - The usual SDK/HTTP mapping is `.get`/`.list` → `GET`, `.create` → `POST`, `.delete` → `DELETE`, and `.edit` → `PATCH` or `PUT`. This is not universal: current specs include POST-based list/get operations, PUT-based create/delete operations, and a POST-based edit operation. Preserve the authoritative operation unless the product spec or overlay is itself wrong.
 - 6 different pagination schemes across the API today is a known
   inconsistency (see `PRD API Pagination Alignment`). cf inherits

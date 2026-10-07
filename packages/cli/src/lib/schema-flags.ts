@@ -1150,7 +1150,7 @@ export function renderFlagHelp(
 
 /** Flags cf itself owns; never read as request-body input. */
 const CF_FLAGS =
-	"_ $0 -- body dry-run dryRun help h local m mode persist-to persistTo profile quiet q version v zone z".split(
+	"_ $0 -- body dry-run dryRun help h json local m mode persist-to persistTo profile quiet q version v zone z".split(
 		" "
 	);
 

@@ -65,6 +65,9 @@ export interface EmitContext {
 	hasHeaders: boolean;
 	isRawOutput: boolean;
 
+	// Module exporting the registered `outputPostProcessor`, if any.
+	outputPostProcessorModule: string | undefined;
+
 	// Labels.
 	progressLabel: string;
 	successLabel: string;

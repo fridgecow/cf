@@ -11,6 +11,7 @@ import {
 	renderPromptQuestion,
 	sanitizeTerminalText,
 	schemaToFlags,
+	unknownFlagNames,
 	validateFlagValue,
 	validateJsonSchema,
 	validateSupportedJsonSchema,
@@ -40,6 +41,19 @@ describe("schema flags", () => {
 			body: { guardrails: { mode: "readonly" } },
 			errors: [],
 		});
+	});
+
+	it("does not report cf's global flags as unknown", () => {
+		expect(
+			unknownFlagNames({
+				_: ["ai", "run"],
+				$0: "cf",
+				json: false,
+				quiet: false,
+				q: false,
+				promptt: "hello",
+			})
+		).toEqual(["promptt"]);
 	});
 
 	it("omits prototype-chain property paths while keeping safe siblings", () => {

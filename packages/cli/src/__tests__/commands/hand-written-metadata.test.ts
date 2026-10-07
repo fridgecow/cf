@@ -146,6 +146,16 @@ describe("hand-written command metadata", () => {
 			);
 		}
 	});
+
+	it("does not shadow global json with a command-local option", () => {
+		expect(
+			[...commands.values()]
+				.filter((command) =>
+					command.options?.some((option) => option.name === "json")
+				)
+				.map((command) => command.command)
+		).toEqual([]);
+	});
 });
 
 describe("hand-written-only command metadata", () => {

@@ -49,6 +49,17 @@ describe("metadata-backed completions", () => {
 		);
 	});
 
+	it("completes the global --json flag", () => {
+		const root = new RootCommand();
+		registerCompletions(root, [TCP_META]);
+
+		expect(parseCompletions(root, ["--js"])).toEqual(
+			expect.arrayContaining([
+				"--json\tPrint results as JSON instead of tables",
+			])
+		);
+	});
+
 	it("registers option aliases and their enum candidates on aliases", () => {
 		const root = new RootCommand();
 		registerCompletions(root, [TCP_META]);

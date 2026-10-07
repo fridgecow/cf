@@ -9,6 +9,7 @@ import {
 	typedBuilderDeclaration,
 	typedSdkTypeAliases,
 } from "./emit/sdk-path.js";
+import { handWrittenOutputPostProcessorModule } from "./hand-written-overrides.js";
 import { generateCommandMeta, type GeneratedCommandMeta } from "./metadata";
 import { getTelemetrySafeFlags } from "./telemetry.js";
 import { escapeForSingleQuote } from "./util.js";
@@ -46,6 +47,9 @@ export function generateCommandFile(
 		resourceName,
 		groupName,
 		opInfo,
+		outputPostProcessorModule: handWrittenOutputPostProcessorModule(
+			method.operationId
+		),
 	});
 
 	const handlerLines = emitHandler(ctx);

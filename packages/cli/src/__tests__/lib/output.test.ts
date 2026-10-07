@@ -11,9 +11,23 @@ import {
 import { formatOutput } from "../../lib/output.js";
 import { theme } from "../../lib/ui/theme.js";
 import { Page } from "../../sdk/sdk/core/pagination/Page.js";
+import type { OutputOptions, OutputPostProcessor } from "../../lib/output.js";
+import type { Mock } from "vite-plus/test";
 
 const ciInfo = vi.hoisted(() => ({ isCI: false }));
 vi.mock("ci-info", () => ({ default: ciInfo }));
+
+const agentDetection = vi.hoisted(() => ({ isAgentic: false }));
+vi.mock("../../lib/agent-context.js", () => ({
+	detectAgentContext: () => ({
+		isAgentic: agentDetection.isAgentic,
+		harness: null,
+		model: null,
+		sessionId: null,
+		invocationId: null,
+		matches: [],
+	}),
+}));
 
 /**
  * Unit tests for `lib/output.ts` — `formatOutput`, the single sink every
@@ -49,6 +63,7 @@ describe("formatOutput", () => {
 			return true;
 		};
 		ciInfo.isCI = false;
+		agentDetection.isAgentic = false;
 		originalStdinIsTTY = process.stdin.isTTY;
 		originalStderrIsTTY = process.stderr.isTTY;
 		originalStdoutIsTTY = process.stdout.isTTY;
@@ -305,5 +320,112 @@ describe("formatOutput", () => {
 		setStderrTTY(true);
 		formatOutput(null);
 		expect(stderrWrite.join("")).toBe("");
+	});
+
+	describe("post-processing", () => {
+		const data = { rows: [{ id: 1 }] };
+		let postProcess: Mock<OutputPostProcessor>;
+		let originalColumns: number;
+
+		/** Parse the plain text of the first `console.log` call as JSON. */
+		function loggedPlainJson(): unknown {
+			const [first] = logSpy.mock.calls;
+			return JSON.parse(stripVTControlCharacters(String(first?.[0])));
+		}
+
+		beforeEach(() => {
+			postProcess = vi.fn<OutputPostProcessor>(() => "rendered table");
+			originalColumns = process.stdout.columns;
+			process.stdout.columns = 120;
+			setStdinTTY(true);
+			setStdoutTTY(true);
+		});
+
+		afterEach(() => {
+			process.stdout.columns = originalColumns;
+		});
+
+		it("prints the rendered text in an interactive terminal", () => {
+			formatOutput(data, { postProcess });
+
+			expect(postProcess).toHaveBeenCalledExactlyOnceWith(data, {
+				columns: 120,
+			});
+			expect(logSpy).toHaveBeenCalledExactlyOnceWith("rendered table");
+		});
+
+		it("passes the unwrapped payload of a paged response", () => {
+			formatOutput(
+				{ result: [{ id: "one" }], result_info: { page: 1 } },
+				{ postProcess }
+			);
+
+			expect(postProcess).toHaveBeenCalledWith([{ id: "one" }], {
+				columns: 120,
+			});
+		});
+
+		it.each<{ when: string; arrange: () => OutputOptions }>([
+			{ when: "--json is passed", arrange: () => ({ json: true }) },
+			{
+				when: "stdout is piped",
+				arrange: () => {
+					setStdoutTTY(false);
+					return {};
+				},
+			},
+			{
+				when: "stdin is piped",
+				arrange: () => {
+					setStdinTTY(false);
+					return {};
+				},
+			},
+			{
+				when: "running in CI",
+				arrange: () => {
+					ciInfo.isCI = true;
+					return {};
+				},
+			},
+			{
+				when: "an agent is running cf",
+				arrange: () => {
+					agentDetection.isAgentic = true;
+					return {};
+				},
+			},
+		])("prints JSON when $when", ({ arrange }) => {
+			formatOutput(data, { postProcess, ...arrange() });
+
+			expect(postProcess).not.toHaveBeenCalled();
+			expect(loggedPlainJson()).toEqual(data);
+		});
+
+		it("falls back to JSON when the renderer declines", () => {
+			postProcess.mockReturnValue(undefined);
+			formatOutput(data, { postProcess });
+
+			expect(postProcess).toHaveBeenCalledOnce();
+			expect(loggedPlainJson()).toEqual(data);
+		});
+
+		it("falls back to JSON when the renderer throws", () => {
+			postProcess.mockImplementation(() => {
+				throw new Error("renderer bug");
+			});
+			formatOutput(data, { postProcess });
+
+			expect(loggedPlainJson()).toEqual(data);
+		});
+
+		it("keeps the null-result behaviour ahead of the renderer", () => {
+			setStderrTTY(true);
+			formatOutput(null, { postProcess, successLabel: "Done" });
+
+			expect(postProcess).not.toHaveBeenCalled();
+			expect(logSpy).not.toHaveBeenCalled();
+			expect(stderrWrite.join("")).toContain("Done");
+		});
 	});
 });

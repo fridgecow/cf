@@ -39,6 +39,8 @@ export interface BuildContextInput {
 	resourceName: string;
 	groupName: string | undefined;
 	opInfo: OperationInfo;
+	/** Module exporting this leaf's `outputPostProcessor`, if registered. */
+	outputPostProcessorModule?: string;
 }
 
 export interface BuildContextResult {
@@ -47,9 +49,15 @@ export interface BuildContextResult {
 }
 
 export function buildEmitContext(input: BuildContextInput): BuildContextResult {
-	const { method, resourceName, groupName, opInfo } = input;
+	const { method, resourceName, groupName, opInfo, outputPostProcessorModule } =
+		input;
 
 	const outputKind = deriveOutputKind(opInfo);
+	if (outputPostProcessorModule !== undefined && outputKind !== "json") {
+		throw new Error(
+			`Output post-processor for operation "${method.operationId}" needs a JSON response, but the operation writes ${outputKind} output.`
+		);
+	}
 	const sdkMapEntry = getSdkMapEntry(method.operationId);
 	const isWorkersCommand = resourceName === "workers";
 	const resolvedPath = opInfo.path;
@@ -85,6 +93,14 @@ export function buildEmitContext(input: BuildContextInput): BuildContextResult {
 	// handler observe the CLI-runtime view.
 	const derived = deriveArgsFromOp(method, resourceName, opInfo);
 	applyOptionalParentDowngrade(derived);
+	if (
+		outputPostProcessorModule !== undefined &&
+		derived.args.some((arg) => arg.name === "json")
+	) {
+		throw new Error(
+			`Output post-processor for operation "${method.operationId}" needs the global --json flag, but the operation defines its own json argument.`
+		);
+	}
 	const { isMutating } = derived;
 	const positional = positionalArgs(derived.args);
 	const options = optionArgs(derived.args);
@@ -166,9 +182,15 @@ export function buildEmitContext(input: BuildContextInput): BuildContextResult {
 			: (actualHttpMethod ?? (isMutating ? "POST" : "GET"));
 	const labels = buildLabels(labelHttpMethod, method.name);
 
-	// Closures over labels + outputKind for the handler emitters.
+	// Closures over labels + outputKind for the handler emitters. A registered
+	// post-processor renders the result in interactive terminals unless the
+	// global `--json` flag asks for the JSON body.
+	const postProcessOptions =
+		outputPostProcessorModule === undefined
+			? ""
+			: ", json: argv.json, postProcess: outputPostProcessor";
 	const formatOutputCall = (indent: string): string =>
-		`${indent}formatOutput(result, { successLabel: \`${escapeForTemplateLiteral(labels.success)}\` });`;
+		`${indent}formatOutput(result, { successLabel: \`${escapeForTemplateLiteral(labels.success)}\`${postProcessOptions} });`;
 	const wrapAwait = (expr: string): string =>
 		`await withProgress(\`${escapeForTemplateLiteral(labels.progress)}\`, async () => (${expr}))`;
 	const rawHttpVerbLiteral = `'${opInfo.method.toUpperCase()}'`;
@@ -271,6 +293,7 @@ export function buildEmitContext(input: BuildContextInput): BuildContextResult {
 		hasParams,
 		hasHeaders,
 		isRawOutput,
+		outputPostProcessorModule,
 		progressLabel: labels.progress,
 		successLabel: labels.success,
 		formatOutputCall,

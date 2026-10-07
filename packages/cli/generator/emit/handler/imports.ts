@@ -84,6 +84,9 @@ export function buildImportSet(ctx: EmitContext): ImportSet {
 	}
 
 	imports.from(`${libPath}/output.js`).add("formatOutput");
+	if (ctx.outputPostProcessorModule !== undefined) {
+		imports.from(ctx.outputPostProcessorModule).add("outputPostProcessor");
+	}
 	imports.from(`${libPath}/dry-run.js`).add("formatDryRun");
 	imports.from(`${libPath}/progress.js`).add("withProgress");
 	imports.from(`${libPath}/telemetry/index.js`).add("runWithTelemetry");

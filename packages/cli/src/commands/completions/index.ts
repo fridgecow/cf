@@ -32,6 +32,7 @@ const GLOBAL_FLAGS: ReadonlyArray<{
 	desc: string;
 }> = [
 	{ name: "quiet", alias: "q", desc: "Suppress non-essential output" },
+	{ name: "json", desc: "Print results as JSON instead of tables" },
 	{ name: "zone", alias: "z", desc: "Zone ID or domain name" },
 	{ name: "profile", desc: "Use a specific auth profile" },
 	{

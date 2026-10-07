@@ -27,6 +27,7 @@ import type { Argv } from "yargs";
  */
 export interface CommonYargsOptions {
 	quiet: boolean;
+	json: boolean;
 	zone: string | undefined;
 	profile: string | undefined;
 	mode: string | undefined;

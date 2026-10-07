@@ -44,6 +44,14 @@ const GLOBAL_OPTIONS = {
 		global: true,
 		default: false,
 	},
+	// Results are JSON unless a command registers an output post-processor
+	// for interactive terminals; `--json` keeps those commands on JSON too.
+	json: {
+		type: "boolean",
+		description: "Print results as JSON instead of tables",
+		global: true,
+		default: false,
+	},
 	zone: {
 		type: "string",
 		alias: "z",
@@ -487,6 +495,7 @@ async function prepareUpdateCheck(): Promise<PreparedUpdateCheck | undefined> {
  *   --help, -h            Show help
  *   --version, -v         Show plain version on stdout (banner on stderr)
  *   --quiet, -q           Suppress non-essential output
+ *   --json                Print results as JSON instead of tables
  *   --zone, -z            Zone ID or domain
  *   --profile             Use a specific auth profile
  *   --mode, -m            Mode used to evaluate project configuration
@@ -506,9 +515,9 @@ async function prepareUpdateCheck(): Promise<PreparedUpdateCheck | undefined> {
  *                         directory.
  *   --config, -c          Explicit Cloudflare config-file path.
  *   --experimental-*      Namespace for opt-in feature gates.
- *   --json                Output-format toggle. Output is all-JSON
- *   --ndjson              today; these names are claimed so a future
- *   --pretty              change of default doesn't collide.
+ *   --ndjson              Output-format toggles. `--json` is live;
+ *   --pretty              these names stay claimed for further output
+ *                         formats.
  *
  * See `AGENTS.md` (root) and `packages/cli/AGENTS.md` for the same
  * list in prose form.

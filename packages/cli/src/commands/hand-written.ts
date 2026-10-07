@@ -40,12 +40,27 @@ export interface SubGroupHandWrittenCommand {
 	describe: string;
 }
 
+/**
+ * Renders a generated leaf's JSON result for people at a terminal; the
+ * generated command itself is unchanged. Keyed by OpenAPI operationId rather
+ * than command path because the renderer depends on the response shape,
+ * which stays with the operation when Forge renames or regroups its command.
+ * `src/commands/<dir>/output.ts` exports `outputPostProcessor`. Revisit as a
+ * Forge output annotation once there are four or more entries.
+ */
+export interface OutputPostProcessorHandWrittenCommand {
+	kind: "outputPostProcessor";
+	operationId: string;
+	dir: string;
+}
+
 export type HandWrittenCommand =
 	| RootHandWrittenCommand
 	| LeafOverrideHandWrittenCommand
 	| LeafHandWrittenCommand
 	| ParentOverrideHandWrittenCommand
-	| SubGroupHandWrittenCommand;
+	| SubGroupHandWrittenCommand
+	| OutputPostProcessorHandWrittenCommand;
 
 export const handWrittenCommands: readonly HandWrittenCommand[] = [
 	{
@@ -352,6 +367,13 @@ export function subGroupHandWrittenCommands(): readonly SubGroupHandWrittenComma
 	return handWrittenCommands.filter(
 		(command): command is SubGroupHandWrittenCommand =>
 			command.kind === "subgroup"
+	);
+}
+
+export function outputPostProcessorHandWrittenCommands(): readonly OutputPostProcessorHandWrittenCommand[] {
+	return handWrittenCommands.filter(
+		(command): command is OutputPostProcessorHandWrittenCommand =>
+			command.kind === "outputPostProcessor"
 	);
 }
 

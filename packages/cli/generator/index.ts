@@ -14,8 +14,10 @@ import {
 import {
 	handWrittenLeafCommands,
 	handWrittenLeafOverrideDir,
+	handWrittenOutputPostProcessorModule,
 	handWrittenParentOverrides,
 	handWrittenSubGroups,
+	outputPostProcessorErrors,
 	readHandWrittenCommandListMeta,
 	readHandWrittenLeafCommandMeta,
 	readHandWrittenLeafOverrideMeta,
@@ -90,6 +92,16 @@ function emitLeafCommand(
 	generationErrors: string[]
 ): void {
 	const overrideDir = handWrittenLeafOverrideDir(emitPath.replace(/\.ts$/, ""));
+	if (
+		overrideDir !== undefined &&
+		handWrittenOutputPostProcessorModule(method.operationId) !== undefined
+	) {
+		// The override replaces the generated handler that would apply the
+		// post-processor; it owns its output instead.
+		generationErrors.push(
+			`Output post-processor for operation "${method.operationId}" cannot apply to the hand-written leaf override in src/commands/${overrideDir}.`
+		);
+	}
 	let code: string | undefined;
 	let meta: CommandMeta;
 	try {
@@ -444,6 +456,7 @@ export const transformer: TransformerFn = async (forge: Forge) => {
 
 	allSchemas.sort((a, b) => a.name.localeCompare(b.name));
 	allCommandMeta.sort((a, b) => a.command.localeCompare(b.command));
+	generationErrors.push(...outputPostProcessorErrors(allCommandMeta));
 
 	// Lazy-register every product. Each entry is a `lazyCommand` shell
 	// whose builder/handler dynamically import the product's index on

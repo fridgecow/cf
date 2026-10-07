@@ -328,6 +328,8 @@ describe("kv", () => {
 
 					Global flags
 					  -q, --quiet       Suppress non-essential output     [boolean] [default: false]
+					      --json        Print results as JSON instead of tables
+					                                                      [boolean] [default: false]
 					  -z, --zone        Zone ID or domain name (overrides CLOUDFLARE_ZONE_ID)
 					                                                                        [string]
 					      --profile     Use a specific auth profile                         [string]
